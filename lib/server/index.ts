@@ -17,15 +17,70 @@ import FlohrmeworkResResponse from "../models/flohrmework_res_response";
 import InvalidRouteReturnError from "../errors/invalid_route_return_error";
 import attachEndpointToApplication from "./handlers/attach_endpoint_to_application";
 
+/**
+ * Flohrmework Server.
+ * 
+ * @since 19/03/2023
+ * @author Felipe Matheus Flohr
+ */
 export default class Server {
+    /**
+     * Express.js application.
+     * 
+     * @since 19/03/2023
+     * @author Felipe Matheus Flohr
+     */
     protected readonly app: Express;
+    /**
+     * Controllers attached.
+     * 
+     * @since 19/03/2023
+     * @author Felipe Matheus Flohr
+     */
     private readonly _controllers: Array<FlohrmeworkControllerCreation>;
+    /**
+     * Middlewares attached.
+     * 
+     * @since 19/03/2023
+     * @author Felipe Matheus Flohr
+     */
     private readonly _middlewares: Array<FlohrmeworkMiddlewareCreation>;
+    /**
+     * Port of the server.
+     * 
+     * @since 19/03/2023
+     * @author Felipe Matheus Flohr
+     */
     private readonly port: number;
+    /**
+     * Hostname of the server.
+     * 
+     * @since 19/03/2023
+     * @author Felipe Matheus Flohr
+     */
     private readonly hostname?: string;
+    /**
+     * Logger of the application.
+     * 
+     * @since 19/03/2023
+     * @author Felipe Matheus Flohr
+     */
     private readonly logger: Logger;
+    /**
+     * Node.js server instance.
+     * 
+     * @since 19/03/2023
+     * @author Felipe Matheus Flohr
+     */
     private server?: ServerType<typeof IncomingMessage, typeof ServerResponse>;
 
+    /**
+     * Constructor of the server.
+     * @param properties Server properties.
+     * 
+     * @since 19/03/2023
+     * @author Felipe Matheus Flohr
+     */
     public constructor(properties: ServerProperties) {
         this.app = express();
         this._controllers = properties.controllers;
@@ -39,20 +94,48 @@ export default class Server {
         this.logger.info("Waiting for listen call...");
     }
 
+    /**
+     * Returns an array copy of
+     * the controllers attached.
+     * 
+     * @since 19/03/2023
+     * @author Felipe Matheus Flohr
+     */
     public get controllers(): Array<FlohrmeworkControllerCreation> {
         return [...this._controllers];
     }
 
+    /**
+     * Returns an array copy of
+     * the middlewares attached.
+     * 
+     * @since 19/03/2023
+     * @author Felipe Matheus Flohr
+     */
     public get middlewares(): Array<FlohrmeworkMiddlewareCreation> {
         return [...this._middlewares];
     }
 
+    /**
+     * Starts the server.
+     * 
+     * @since 19/03/2023
+     * @author Felipe Matheus Flohr
+     */
     public async listen(): Promise<void> {
         const server = await this.promisifyServerListen();
         this.logger.okay(`Listening on port ${this.port}.`);
         this.server = server;
     }
 
+    /**
+     * Closes the server.
+     * @throws ServerNotRunningError if
+     * the server is not running.
+     * 
+     * @since 19/03/2023
+     * @author Felipe Matheus Flohr
+     */
     public close(): Promise<void> {
         return new Promise<void>((res, rej) => {
             if (this.server) {
@@ -69,13 +152,25 @@ export default class Server {
         });
     }
 
+    /**
+     * Setup the middlewares.
+     * 
+     * @since 19/03/2023
+     * @author Felipe Matheus Flohr
+     */
     private setupMiddlewares(): void {
         try {
             this.logger.info("Setting up the middlewares...");
 
             for (const middlewareCreation of this.middlewares) {
                 const middleware = middlewareCreation();
-                this.app.use(middleware.path, middleware.use);
+
+                if (middleware.path) {
+                    this.app.use(middleware.path, middleware.use);
+                } else {
+                    this.app.use(middleware.use);
+                }
+
                 this.logger.info(
                     `Middleware set up for path ${middleware.path}.`
                 );
@@ -93,6 +188,17 @@ export default class Server {
         }
     }
 
+    /**
+     * Setup the controllers.
+     * @throws InvalidRoutePathError if
+     * some route path is invalid.
+     * @throws InvalidRouteReturnError if
+     * some return type of an endpoint is
+     * invalid.
+     * 
+     * @since 19/03/2023
+     * @author Felipe Matheus Flohr
+     */
     private setupControllers(): void {
         try {
             this.logger.info("Setting up controllers...");
@@ -161,6 +267,14 @@ export default class Server {
         }
     }
 
+    /**
+     * Wraps a controller function with try/catch.
+     * @param func Function to wrap.
+     * @returns Wrapped function.
+     * 
+     * @since 19/03/2023
+     * @author Felipe Matheus Flohr
+     */
     private wrapControllerFunction(func: FlohrmeworkControllerEndpoint): FlohrmeworkControllerEndpoint {
         const res = async (req: Request, next?: NextFunction) => {
             try {
@@ -173,6 +287,17 @@ export default class Server {
         return res;
     }
 
+    /**
+     * Handles an uncaught API error.
+     * @param err Error thrown
+     * @param func Function which the
+     * error was thrown.
+     * @returns Endpoint return data
+     * with status code 500.
+     * 
+     * @since 19/03/2023
+     * @author Felipe Matheus Flohr
+     */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private handleUncaughtApiError(err: unknown, func: (...args: any[]) => any): FlohrmeworkEndpointReturnData {
         const message = err instanceof Error ? `INTERNAL_SERVER_ERROR: ${err.message}` : "INTERNAL_SERVER_ERROR";
@@ -188,6 +313,13 @@ export default class Server {
         return res;
     }
 
+    /**
+     * Promisifies the server opening.
+     * @returns Node.js server instance.
+     * 
+     * @since 19/03/2023
+     * @author Felipe Matheus Flohr
+     */
     private promisifyServerListen(): Promise<ServerType<typeof IncomingMessage, typeof ServerResponse>> {
         return new Promise<ServerType<typeof IncomingMessage, typeof ServerResponse>>((res, rej) => {
             try {

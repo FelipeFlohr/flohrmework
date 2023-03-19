@@ -4,6 +4,12 @@ import {
 } from "@felipeflohr/flohr-common-logger";
 import { FileWriter } from "@felipeflohr/flohr-common-logger";
 
+/**
+ * Logger used in the Flohrmework
+ * 
+ * @since 19/03/2023
+ * @author Felipe Matheus Flohr
+ */
 export default class Logger extends LoggerImplementation {
     public constructor() {
         const hasLogPath =

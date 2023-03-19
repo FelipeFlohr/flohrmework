@@ -1,0 +1,61 @@
+# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
+
+name: Project docs to GitHub Pages
+
+on:
+    push:
+        branches: ["main"]
+    pull_request:
+        branches: ["main"]
+
+permissions:
+    contents: write
+    pages: write
+    id-token: write
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                node-version: [18.x]
+                # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+        steps:
+            - name: Checkout repo using git
+              uses: actions/checkout@v3
+              with:
+                  lfs: true
+
+            - name: Set up Node
+              uses: actions/setup-node@v3
+              env:
+                  TOKEN: ${{secrets.TOKEN}}
+                  NODE_AUTH_TOKEN: ${{secrets.TOKEN}}
+              with:
+                  node-version: 16
+
+            - name: Install Dependencies
+              run: npm install
+              env:
+                  TOKEN: ${{secrets.TOKEN}}
+                  NODE_AUTH_TOKEN: ${{secrets.TOKEN}}
+
+            - name: Add node_modules/.bin to PATH
+              run: export PATH="./node_modules/.bin:$PATH"
+
+            - name: Generate docs
+              run: npm run doc:generate
+
+            - name: Deploy GitHub Pages
+              uses: JamesIves/github-pages-deploy-action@v4.4.1
+              with:
+                  branch: docs
+                  folder: docs
+                  token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Cache node_modules
+              uses: actions/cache@v2
+              with:
+                  path: node_modules
+                  key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}

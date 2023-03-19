@@ -1,6 +1,18 @@
 import HttpMethod from "../../enums/http_methods";
 import type { Express, NextFunction, Request, Response } from "express";
 
+/**
+ * Attaches a function to
+ * an endpoint.
+ * @param method HTTP Method.
+ * @param app Express application.
+ * @param path Path of the endpoint.
+ * @param expressFunction Express
+ * function to attach.
+ * 
+ * @since 19/03/2023
+ * @author Felipe Matheus Flohr
+ */
 export default function attachEndpointToApplication(
     method: HttpMethod,
     app: Express,
