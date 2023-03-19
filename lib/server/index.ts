@@ -10,7 +10,8 @@ import { Server as ServerType, IncomingMessage, ServerResponse } from "http";
 import ServerNotRunningError from "../errors/server_not_running_error";
 import FlohrmeworkControllerEndpoint from "../types/flohrmework_controller_endpoint";
 import FlohrmeworkEndpointResponse from "../types/flohrmework_endpoint_response";
-import IEndpointRepository from "../decorators/endpoint/endpoint_repository/endpoint_repository";
+import EndpointModel from "../models/endpoint_model";
+import InvalidRoutePathError from "../errors/invalid_route_path_error";
 import HttpMethod from "../enums/http_methods";
 
 export default class Server {
@@ -20,7 +21,6 @@ export default class Server {
     private readonly port: number;
     private readonly hostname?: string;
     private readonly logger: Logger;
-    private readonly endpointRepository: IEndpointRepository;
     private server?: ServerType<typeof IncomingMessage, typeof ServerResponse>
 
     public constructor(properties: ServerProperties) {
@@ -30,10 +30,10 @@ export default class Server {
         this.hostname = properties.hostname;
         this.port = properties.port;
         this.logger = container.get(TYPES.Logger);
-        this.endpointRepository = container.get<IEndpointRepository>(TYPES.EndpointRepository);
 
         this.setupMiddlewares();
         this.setupControllers();
+        this.logger.info("Waiting for listen call...");
     }
 
     public get controllers(): Array<FlohrmeworkControllerCreation> {
@@ -92,52 +92,85 @@ export default class Server {
 
     private setupControllers(): void {
         try {
-            const endpoints = this.endpointRepository.getEndpoints();
+            this.logger.info("Setting up controllers...")
+            for (const controller of this.controllers) {
+                const instance = controller()
 
-            for (const endpoint of endpoints) {
-                const func = async (req: Request, res: Response, next: NextFunction) => {
-                    const wrappedFunction = this.wrapControllerFunction(endpoint.func)
-                    const result = await wrappedFunction(req, next);
-
-                    res.status(result.code).json(result);
+                if (!instance.path.startsWith("/")) {
+                    throw new InvalidRoutePathError(instance.path);
                 }
 
-                const method = endpoint.method;
-                switch(method) {
-                    case HttpMethod.CONNECT:
-                        this.app.connect(endpoint.path, func)
-                        break;
-                    case HttpMethod.DELETE:
-                        this.app.delete(endpoint.path, func)
-                        break;
-                    case HttpMethod.GET:
-                        this.app.get(endpoint.path, func)
-                        break;
-                    case HttpMethod.HEAD:
-                        this.app.head(endpoint.path, func)
-                        break;
-                    case HttpMethod.OPTIONS:
-                        this.app.options(endpoint.path, func)
-                        break;
-                    case HttpMethod.PATCH:
-                        this.app.patch(endpoint.path, func)
-                        break;
-                    case HttpMethod.POST:
-                        this.app.post(endpoint.path, func)
-                        break;
-                    case HttpMethod.PUT:
-                        this.app.put(endpoint.path, func)
-                        break;
-                    case HttpMethod.TRACE:
-                        this.app.trace(endpoint.path, func)
-                        break;
+                this.logger.info(`Setting the routes for path ${instance.path}.`)
+
+                const endpoints: EndpointModel[] = Reflect.getMetadataKeys(instance)
+                    .map(k => {
+                        if (typeof k !== "string") {
+                            return undefined;
+                        }
+                        return k;
+                    })
+                    .filter(k => k !== undefined)
+                    .filter(k => k?.startsWith("FLOHRMEWORK_ENDPOINT"))
+                    .map(k => {
+                        return Reflect.getMetadata(k, instance);
+                    })
+                    .filter(o => o instanceof EndpointModel);
+
+                for (const endpoint of endpoints) {
+                    const controllerPath = instance.path.endsWith("/")
+                        ? instance.path.substring(0, instance.path.length - 1)
+                        : instance.path;
+                    const endpointPath = endpoint.path.endsWith("/")
+                        ? endpoint.path.substring(0, endpoint.path.length - 1)
+                        : endpoint.path;
+                    const path = `${controllerPath}${endpointPath}`
+
+                    const expressFunction = async (req: Request, res: Response, next: NextFunction) => {
+                        const wrappedFunction = this.wrapControllerFunction(endpoint.func);
+                        const wrapRes = await wrappedFunction(req, next);
+
+                        res.status(wrapRes.code).json(wrapRes);
+                    }
+
+                    const method = endpoint.method;
+                    switch (method) {
+                        case HttpMethod.CONNECT:
+                            this.app.connect(path, expressFunction);
+                            break;
+                        case HttpMethod.DELETE:
+                            this.app.delete(path, expressFunction);
+                            break;
+                        case HttpMethod.GET:
+                            this.app.get(path, expressFunction);
+                            break;
+                        case HttpMethod.HEAD:
+                            this.app.head(path, expressFunction);
+                            break;
+                        case HttpMethod.OPTIONS:
+                            this.app.options(path, expressFunction);
+                            break;
+                        case HttpMethod.PATCH:
+                            this.app.patch(path, expressFunction);
+                            break;
+                        case HttpMethod.POST:
+                            this.app.post(path, expressFunction);
+                            break;
+                        case HttpMethod.PUT:
+                            this.app.put(path, expressFunction);
+                            break;
+                        case HttpMethod.TRACE:
+                            this.app.trace(path, expressFunction);
+                            break;
+                    }
                 }
             }
+ 
+            this.logger.okay("All controllers have been set up.");
         } catch (err) {
             if (err instanceof Error) {
-                this.logger.fatal(`Middleware setup failed: ${err.message} | Stack: ${err.stack}`)
+                this.logger.fatal(`Controller setup failed: ${err.message} | Stack: ${err.stack}`)
             } else {
-                this.logger.fatal(`Middleware setup failed: ${err}`)
+                this.logger.fatal(`Controller setup failed: ${err}`)
             }
         }
     }
