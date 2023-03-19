@@ -12,7 +12,7 @@ export default abstract class FlohrmeworkMiddleware {
 
     private static parsePath(path: string): string {
         if (!path.startsWith("/")) {
-            throw new InvalidRoutePathError(path)
+            throw new InvalidRoutePathError(path);
         }
 
         path = path.trim();

@@ -1,6 +1,6 @@
 import { NextFunction, Request } from "express";
-import FlohrmeworkEndpointResponse from "./flohrmework_endpoint_response";
+import FlohrmeworkResponse from "../models/flohrmework_response";
 
-type FlohrmeworkControllerEndpoint = (req: Request, next?: NextFunction) => Promise<FlohrmeworkEndpointResponse>;
+type FlohrmeworkControllerEndpoint = (req: Request, next?: NextFunction) => Promise<FlohrmeworkResponse>;
 
 export default FlohrmeworkControllerEndpoint;

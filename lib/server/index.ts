@@ -1,18 +1,21 @@
 import type { Express, NextFunction, Request, Response } from "express";
+import type { Server as ServerType, IncomingMessage, ServerResponse } from "http";
+import type FlohrmeworkControllerCreation from "../types/flohrmework_controller_creation";
+import type FlohrmeworkMiddlewareCreation from "../types/flohrmework_middleware_creation";
+import type ServerProperties from "./properties";
+import type FlohrmeworkControllerEndpoint from "../types/flohrmework_controller_endpoint";
+import type { FlohrmeworkEndpointReturnData } from "../models/flohrmework_data_response";
 import express from "express";
-import FlohrmeworkControllerCreation from "../types/flohrmework_controller_creation";
-import FlohrmeworkMiddlewareCreation from "../types/flohrmework_middleware_creation";
-import ServerProperties from "./properties";
 import Logger from "../logger";
 import container from "../container";
 import TYPES from "../container/types";
-import { Server as ServerType, IncomingMessage, ServerResponse } from "http";
 import ServerNotRunningError from "../errors/server_not_running_error";
-import FlohrmeworkControllerEndpoint from "../types/flohrmework_controller_endpoint";
-import FlohrmeworkEndpointResponse from "../types/flohrmework_endpoint_response";
 import EndpointModel from "../models/endpoint_model";
 import InvalidRoutePathError from "../errors/invalid_route_path_error";
-import HttpMethod from "../enums/http_methods";
+import FlohrmeworkDataResponse from "../models/flohrmework_data_response";
+import FlohrmeworkResResponse from "../models/flohrmework_res_response";
+import InvalidRouteReturnError from "../errors/invalid_route_return_error";
+import attachEndpointToApplication from "./handlers/attach_endpoint_to_application";
 
 export default class Server {
     protected readonly app: Express;
@@ -21,7 +24,7 @@ export default class Server {
     private readonly port: number;
     private readonly hostname?: string;
     private readonly logger: Logger;
-    private server?: ServerType<typeof IncomingMessage, typeof ServerResponse>
+    private server?: ServerType<typeof IncomingMessage, typeof ServerResponse>;
 
     public constructor(properties: ServerProperties) {
         this.app = express();
@@ -45,8 +48,8 @@ export default class Server {
     }
 
     public async listen(): Promise<void> {
-        const server = await this.promisifyServerListen()
-        this.logger.okay(`Listening on port ${this.port}.`)
+        const server = await this.promisifyServerListen();
+        this.logger.okay(`Listening on port ${this.port}.`);
         this.server = server;
     }
 
@@ -55,15 +58,15 @@ export default class Server {
             if (this.server) {
                 this.server.close((err) => {
                     if (err) {
-                        rej(err)
+                        rej(err);
                     } else {
-                        res()
+                        res();
                     }
-                })
+                });
             } else {
-                rej(new ServerNotRunningError())
+                rej(new ServerNotRunningError());
             }
-        })
+        });
     }
 
     private setupMiddlewares(): void {
@@ -81,9 +84,9 @@ export default class Server {
             this.logger.okay("All middlewares have been set up.");
         } catch (err) {
             if (err instanceof Error) {
-                this.logger.fatal(`Middleware setup failed: ${err.message} | Stack: ${err.stack}`)
+                this.logger.fatal(`Middleware setup failed: ${err.message} | Stack: ${err.stack}`);
             } else {
-                this.logger.fatal(`Middleware setup failed: ${err}`)
+                this.logger.fatal(`Middleware setup failed: ${err}`);
             }
 
             throw err;
@@ -92,15 +95,15 @@ export default class Server {
 
     private setupControllers(): void {
         try {
-            this.logger.info("Setting up controllers...")
+            this.logger.info("Setting up controllers...");
             for (const controller of this.controllers) {
-                const instance = controller()
+                const instance = controller();
 
                 if (!instance.path.startsWith("/")) {
                     throw new InvalidRoutePathError(instance.path);
                 }
 
-                this.logger.info(`Setting the routes for path ${instance.path}.`)
+                this.logger.info(`Setting the routes for path ${instance.path}.`);
 
                 const endpoints: EndpointModel[] = Reflect.getMetadataKeys(instance)
                     .map(k => {
@@ -123,76 +126,64 @@ export default class Server {
                     const endpointPath = endpoint.path.endsWith("/")
                         ? endpoint.path.substring(0, endpoint.path.length - 1)
                         : endpoint.path;
-                    const path = `${controllerPath}${endpointPath}`
-
+                    const path = `${controllerPath}${endpointPath}`;
+                    
                     const expressFunction = async (req: Request, res: Response, next: NextFunction) => {
-                        const wrappedFunction = this.wrapControllerFunction(endpoint.func);
-                        const wrapRes = await wrappedFunction(req, next);
+                        const endpointFunc = this.wrapControllerFunction(endpoint.func);
+                        const wrapRes = await endpointFunc(req, next);
 
-                        res.status(wrapRes.code).json(wrapRes);
-                    }
+                        if (wrapRes instanceof FlohrmeworkDataResponse) {
+                            res.status(wrapRes.data.code).json(wrapRes.data);
+                        } else if (wrapRes instanceof FlohrmeworkResResponse) {
+                            try {
+                                await wrapRes.func(res);
+                            } catch (err) {
+                                const error = this.handleUncaughtApiError(err, wrapRes.func);
+                                res.status(error.code).json(error);
+                            }
+                        } else {
+                            throw new InvalidRouteReturnError(path);
+                        }
+                    };
 
                     const method = endpoint.method;
-                    switch (method) {
-                        case HttpMethod.CONNECT:
-                            this.app.connect(path, expressFunction);
-                            break;
-                        case HttpMethod.DELETE:
-                            this.app.delete(path, expressFunction);
-                            break;
-                        case HttpMethod.GET:
-                            this.app.get(path, expressFunction);
-                            break;
-                        case HttpMethod.HEAD:
-                            this.app.head(path, expressFunction);
-                            break;
-                        case HttpMethod.OPTIONS:
-                            this.app.options(path, expressFunction);
-                            break;
-                        case HttpMethod.PATCH:
-                            this.app.patch(path, expressFunction);
-                            break;
-                        case HttpMethod.POST:
-                            this.app.post(path, expressFunction);
-                            break;
-                        case HttpMethod.PUT:
-                            this.app.put(path, expressFunction);
-                            break;
-                        case HttpMethod.TRACE:
-                            this.app.trace(path, expressFunction);
-                            break;
-                    }
+                    attachEndpointToApplication(method, this.app, path, expressFunction);
                 }
             }
- 
+
             this.logger.okay("All controllers have been set up.");
         } catch (err) {
             if (err instanceof Error) {
-                this.logger.fatal(`Controller setup failed: ${err.message} | Stack: ${err.stack}`)
+                this.logger.fatal(`Controller setup failed: ${err.message} | Stack: ${err.stack}`);
             } else {
-                this.logger.fatal(`Controller setup failed: ${err}`)
+                this.logger.fatal(`Controller setup failed: ${err}`);
             }
         }
     }
-    
+
     private wrapControllerFunction(func: FlohrmeworkControllerEndpoint): FlohrmeworkControllerEndpoint {
         const res = async (req: Request, next?: NextFunction) => {
             try {
                 return await func(req, next);
             } catch (err) {
-                const message = err instanceof Error ? `INTERNAL_SERVER_ERROR: ${err.message}` : "INTERNAL_SERVER_ERROR"
-                const res: FlohrmeworkEndpointResponse = {
-                    code: 500,
-                    message: message
-                }
-
-                err instanceof Error
-                    ? this.logger.error(`An uncaught error was thrown in the ${func.name} method: ${err.message} | Stack: ${err.stack}`)
-                    : this.logger.error(`An uncaught error was thrown in the ${func.name} method: ${err}`);
-
-                return res;
+                return this.handleUncaughtApiError(err, func);
             }
-        }
+        };
+
+        return res;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private handleUncaughtApiError(err: unknown, func: (...args: any[]) => any): FlohrmeworkEndpointReturnData {
+        const message = err instanceof Error ? `INTERNAL_SERVER_ERROR: ${err.message}` : "INTERNAL_SERVER_ERROR";
+        const res: FlohrmeworkEndpointReturnData = {
+            code: 500,
+            message: message
+        };
+
+        err instanceof Error
+            ? this.logger.error(`An uncaught error was thrown in the ${func.name} method: ${err.message} | Stack: ${err.stack}`)
+            : this.logger.error(`An uncaught error was thrown in the ${func.name} method: ${err}`);
 
         return res;
     }
@@ -203,15 +194,15 @@ export default class Server {
                 if (this.hostname) {
                     const server = this.app.listen(this.port, this.hostname, () => {
                         res(server);
-                    })
+                    });
                 } else {
                     const server = this.app.listen(this.port, () => {
-                        res(server)
-                    })
+                        res(server);
+                    });
                 }
             } catch (err) {
-                rej(err)
+                rej(err);
             }
-        })
+        });
     }
 }

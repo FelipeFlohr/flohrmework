@@ -1,9 +1,9 @@
-import FlohrmeworkController from "../../controller"
-import FlohrmeworkControllerEndpoint from "../../types/flohrmework_controller_endpoint"
-import HttpMethod from "../../enums/http_methods"
-import NoMethodFoundError from "../../errors/no_method_found"
-import EndpointModel from "../../models/endpoint_model"
-import InvalidRoutePathError from "../../errors/invalid_route_path_error"
+import FlohrmeworkController from "../controller";
+import FlohrmeworkControllerEndpoint from "../types/flohrmework_controller_endpoint";
+import HttpMethod from "../enums/http_methods";
+import NoMethodFoundError from "../errors/no_method_found_error";
+import EndpointModel from "../models/endpoint_model";
+import InvalidRoutePathError from "../errors/invalid_route_path_error";
 
 export default function Endpoint(method: HttpMethod, path: string) {
     if (!path.startsWith("/")) {
@@ -16,5 +16,5 @@ export default function Endpoint(method: HttpMethod, path: string) {
         } else {
             throw new NoMethodFoundError(key.toString());
         }
-    }
+    };
 }

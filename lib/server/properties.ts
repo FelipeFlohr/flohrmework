@@ -1,5 +1,5 @@
-import FlohrmeworkControllerCreation from "../types/flohrmework_controller_creation"
-import FlohrmeworkMiddlewareCreation from "../types/flohrmework_middleware_creation"
+import FlohrmeworkControllerCreation from "../types/flohrmework_controller_creation";
+import FlohrmeworkMiddlewareCreation from "../types/flohrmework_middleware_creation";
 
 type ServerProperties = {
     readonly port: number
