@@ -1,5 +1,5 @@
 {
-    "name": "flohrmework",
+    "name": "@felipeflohr/flohrmework",
     "version": "1.0.0",
     "description": "My personal framework.",
     "publishConfig": {
