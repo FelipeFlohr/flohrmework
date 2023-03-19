@@ -2,6 +2,10 @@
     "name": "flohrmework",
     "version": "1.0.0",
     "description": "My personal framework.",
+    "publishConfig": {
+        "registry": "https://npm.pkg.github.com/@FelipeFlohr",
+        "access": "public"
+    },
     "scripts": {
         "test": "jest",
         "compile": "tsc && gulp",
