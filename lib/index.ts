@@ -25,6 +25,7 @@ import ServerProperties from "./server/properties";
 import FlohrmeworkControllerCreation from "./types/flohrmework_controller_creation";
 import FlohrmeworkControllerEndpoint from "./types/flohrmework_controller_endpoint";
 import FlohrmeworkMiddlewareCreation from "./types/flohrmework_middleware_creation";
+import type { Request, Response, NextFunction } from "express";
 
 export {
     FlohrmeworkController,
@@ -53,5 +54,8 @@ export {
     ServerProperties,
     FlohrmeworkControllerCreation,
     FlohrmeworkControllerEndpoint,
-    FlohrmeworkMiddlewareCreation
+    FlohrmeworkMiddlewareCreation,
+    Request,
+    Response,
+    NextFunction
 };
